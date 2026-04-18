@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NGO AI Hub - Reports</title>
+  <link rel="stylesheet" href="reports.css">
+</head>
+<body>
+
+  <div class="sidebar">
+    <div class="logo">
+      <h2>NGO AI Hub</h2>
+      <p>Relief System</p>
+    </div>
+
+<div class="nav">
+   <a href="dashboard.html">Dashboard</a>
+  <a href="volunteer1_FINAL.html" >Volunteers</a>
+  <a href="Report.html" class="active">Reports</a>
+   <a href="ai-agent.html" class="ai">AI Assistant</a>
+</div>
+
+  </div>
+
+<div class="main">
+
+  <div class="topbar">
+    <div>
+      <h2>NGO Relief System</h2>
+      <p>Real-time operations overview</p>
+    </div>
+  </div>
+
+  <div class="header">
+    <div>
+      <h2>Problem Reports</h2>
+      <p>All issues reported from field locations</p>
+    </div>
+
+    <a href="form.html">
+      <button class="new-btn">+ New Report</button>
+    </a>
+  </div>
+
+  <div class="stats">
+    <div class="card"><p>New</p><h3 id="stat-new">0</h3></div>
+    <div class="card"><p>In Progress</p><h3 id="stat-progress">0</h3></div>
+    <div class="card"><p>Resolved</p><h3 id="stat-resolved">0</h3></div>
+    <div class="card"><p>Locations</p><h3 id="stat-locations">0</h3></div>
+  </div>
+
+  <div class="filters">
+    <input type="text" id="searchInput" placeholder="Search reports...">
+
+    <div class="tabs">
+      <button class="tab active" onclick="filterReports('all')">All</button>
+      <button class="tab" onclick="filterReports('new')">New</button>
+      <button class="tab" onclick="filterReports('progress')">In Progress</button>
+      <button class="tab" onclick="filterReports('resolved')">Resolved</button>
+    </div>
+  </div>
+
+  <div id="reportList"></div>
+
+</div>
+
+<script src="reports_connected.js"></script>
+</body>
+</html>

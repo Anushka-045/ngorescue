@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>dashboard</title>
+
+<link rel="stylesheet" href="dashboard.css">
+</head>
+
+<body>
+
+  <div class="sidebar">
+    <div class="logo">
+      <h2>NGO AI Hub</h2>
+      <p>Relief System</p>
+    </div>
+
+<div class="nav">
+  <a href="dashboard.html" class="active">Dashboard</a>
+  <a href="volunteer1_FINAL.html" >Volunteers</a>
+  <a href="Report.html">Reports</a>
+  <a href="ai-agent.html" class="ai">AI Assistant</a>
+</div>
+
+  </div>
+
+<div class="main">
+
+  <div class="topbar">
+    <h2>NGO Relief System</h2>
+    <div></div>
+  </div>
+
+  <div class="summary">
+    <div class="summary-card">
+      <div>
+        <p>Urgent</p>
+        <h2 id="urgentCount"></h2>
+        <span class="danger">Needs immediate action</span>
+      </div>
+    </div>
+
+    <div class="summary-card">
+      <div>
+        <p>High Priority</p>
+        <h2 id="highCount"></h2>
+        <span class="hour1">Within 1 hour</span>
+      </div>
+    </div>
+
+    <div class="summary-card">
+      <div>
+        <p>Medium</p>
+        <h2 id="mediumCount"></h2>
+        <span class="med">Within 24 hours</span>
+      </div>
+    </div>
+
+    <div class="summary-card">
+      <div>
+        <p>Total Actions</p>
+        <h2 id="totalCount"></h2>
+        <span class="success">Across all zones</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <button onclick="filterCards('all')" class="active">All</button>
+    <button onclick="filterCards('urgent')">Urgent</button>
+    <button onclick="filterCards('high')">High</button>
+    <button onclick="filterCards('medium')">Medium</button>
+  </div>
+
+  <div class="search-bar">
+    <input type="text" id="searchInput" placeholder="Search actions...">
+  </div>
+
+  <div id="cards"></div>
+
+</div>
+
+<script src="dashboard_connected.js"></script>
+</body>
+</html>
