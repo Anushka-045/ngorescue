@@ -73,9 +73,10 @@ async function callAI(prompt, systemPrompt) {
     headers: {
       "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
       "Content-Type": "application/json",
+      "HTTP-Referer": "http://localhost:5000",
     },
     body: JSON.stringify({
-      model: "openai/gpt-oss-safeguard-20b",
+      model: "google/gemini-2.0-flash-lite-001",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: prompt }
@@ -84,6 +85,7 @@ async function callAI(prompt, systemPrompt) {
     }),
   });
   const data = await response.json();
+  // console.log("OpenRouter response:", JSON.stringify(data, null, 2)); 
   return data.choices?.[0]?.message?.content?.trim() || null;
 }
 
