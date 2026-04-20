@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Login - NGO AI Hub</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #e3f2fd, #ffffff);
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .container {
+      background: white;
+      padding: 40px;
+      border-radius: 15px;
+      width: 350px;
+      text-align: center;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    h2 {
+      margin-bottom: 20px;
+      color: #333;
+    }
+    .role-select {
+      margin-bottom: 20px;
+    }
+    .role-select label {
+      margin: 0 10px;
+      font-weight: bold;
+      color: #444;
+      cursor: pointer;
+    }
+    .role-select label:hover {
+      color: #1abc9c;
+    }
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      outline: none;
+      transition: 0.3s;
+      box-sizing: border-box;
+    }
+    input:focus {
+      border-color: #1abc9c;
+      box-shadow: 0 0 5px rgba(26,188,156,0.4);
+    }
+    .btn {
+      width: 100%;
+      padding: 12px;
+      margin-top: 15px;
+      border: none;
+      border-radius: 8px;
+      background: #1abc9c;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .btn:hover {
+      background: #16a085;
+    }
+    .btn:disabled {
+      background: #a0d9cc;
+      cursor: not-allowed;
+    }
+    .extra {
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    .extra a {
+      color: #1abc9c;
+      text-decoration: none;
+    }
+    .extra a:hover {
+      text-decoration: underline;
+    }
+    .error {
+      color: red;
+      font-size: 13px;
+      margin-top: 8px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>NGO AI Hub</h2>
+
+    <div class="role-select">
+      <label>
+        <input type="radio" name="role" value="volunteer"> Volunteer
+      </label>
+      <label>
+        <input type="radio" name="role" value="admin" checked> Admin
+      </label>
+    </div>
+
+    <input type="text" id="emailInput" placeholder="Email" value="admin@ngorescue.com">
+    <input type="password" id="passwordInput" placeholder="Password" value="admin123">
+    <div class="error" id="errorMsg">Invalid email or password.</div>
+    <button class="btn" id="loginBtn" onclick="doLogin()">Login</button>
+
+    <div class="extra">
+      <p><a href="#">Forgot Password?</a></p>
+    </div>
+  </div>
+
+  <script>
+    const BASE = "http://localhost:5000/api";
+
+    document.querySelectorAll("input[name='role']").forEach(radio => {
+      radio.addEventListener("change", function () {
+        if (this.value === "admin") {
+          document.getElementById("emailInput").value = "admin@ngorescue.com";
+          document.getElementById("passwordInput").value = "admin123";
+        } else {
+          document.getElementById("emailInput").value = "volunteer@ngorescue.com";
+          document.getElementById("passwordInput").value = "vol123";
+        }
+      });
+    });
+
+    document.getElementById("passwordInput").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") doLogin();
+    });
+
+    async function doLogin() {
+      const email = document.getElementById("emailInput").value.trim();
+      const password = document.getElementById("passwordInput").value.trim();
+      const btn = document.getElementById("loginBtn");
+      const errorMsg = document.getElementById("errorMsg");
+
+      errorMsg.style.display = "none";
+      btn.disabled = true;
+      btn.textContent = "Logging in...";
+
+      try {
+        const res = await fetch(`${BASE}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          localStorage.setItem("ngo_token", data.token);
+          localStorage.setItem("ngo_role", data.role);
+          window.location.href = "dashboard.html";
+        } else {
+          errorMsg.style.display = "block";
+          btn.disabled = false;
+          btn.textContent = "Login";
+        }
+      } catch (err) {
+        errorMsg.textContent = "Cannot connect to server. Make sure backend is running.";
+        errorMsg.style.display = "block";
+        btn.disabled = false;
+        btn.textContent = "Login";
+      }
+    }
+  </script>
+</body>
+</html>
