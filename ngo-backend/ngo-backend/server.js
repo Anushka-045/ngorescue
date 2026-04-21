@@ -3,7 +3,17 @@ const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
+const admin = require("firebase-admin");
+const serviceAccount = require("./firebase-key.json");
 
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+  });
+}
+
+const db = admin.firestore();
+console.log("Firebase connected successfully");
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -99,9 +109,13 @@ app.post("/api/auth/login", (req, res) => {
   res.status(401).json({ success: false, message: "Invalid credentials" });
 });
 
-app.get("/api/volunteers", auth, (req, res) => {
+app.get("/api/volunteers", auth, async(req, res) => {
+  async function getVolunteersFromFirebase() {
+    const snapshot = await db.collection("volunteers").get();
+    return snapshot.docs.map(doc => doc.data());
+  }
   const { search } = req.query;
-  let list = [...volunteers];
+  let list = await getVolunteersFromFirebase();
   if (search) {
     const s = search.toLowerCase();
     list = list.filter(v => v.name.toLowerCase().includes(s) || v.skills.some(sk => sk.toLowerCase().includes(s)) || v.location.toLowerCase().includes(s));
@@ -110,10 +124,14 @@ app.get("/api/volunteers", auth, (req, res) => {
   res.json({ success: true, stats: { total: list.length, available }, data: list });
 });
 
-app.post("/api/volunteers", auth, (req, res) => {
+app.post("/api/volunteers", auth, async(req, res) => {
   const { name, email, phone, location, qualification, skills } = req.body;
   if (!name || !email || !phone) return res.status(400).json({ success: false, message: "Name, email and phone are required" });
-  if (volunteers.find(v => v.email === email)) return res.status(409).json({ success: false, message: "Email already exists" });
+  const snapshot = await db.collection("volunteers").where("email", "==", email).get();
+
+  if (!snapshot.empty) {
+    return res.status(409).json({ success: false, message: "Email already exists" });
+  }
   const newVol = {
     _id: "v" + Date.now(),
     name, email, phone,
@@ -125,34 +143,44 @@ app.post("/api/volunteers", auth, (req, res) => {
     skills: Array.isArray(skills) ? skills : (skills ? skills.split(",").map(s => s.trim()) : []),
     avatar: name.slice(0, 2).toUpperCase(),
   };
-  volunteers.push(newVol);
-  saveData();
+  await db.collection("volunteers").doc(newVol._id).set(newVol);
   res.json({ success: true, data: newVol });
 });
 
-app.patch("/api/volunteers/:id/toggle-status", auth, (req, res) => {
-  const vol = volunteers.find(v => v._id === req.params.id);
-  if (!vol) return res.status(404).json({ success: false, message: "Volunteer not found" });
-  vol.status = vol.status === "available" ? "offline" : "available";
-  saveData();
-  res.json({ success: true, data: vol });
+app.patch("/api/volunteers/:id/toggle-status", auth, async (req, res) => {
+  const { id } = req.params;
+
+  const docRef = db.collection("volunteers").doc(id);
+  const doc = await docRef.get();
+
+  if (!doc.exists) {
+    return res.status(404).json({ success: false, message: "Volunteer not found" });
+  }
+
+  const vol = doc.data();
+  const newStatus = vol.status === "available" ? "offline" : "available";
+
+  await docRef.update({ status: newStatus });
+
+  res.json({ success: true, data: { ...vol, status: newStatus } });
 });
 
-app.get("/api/reports", auth, (req, res) => {
+app.get("/api/reports", auth, async(req, res) => {
   const { status, search } = req.query;
-  let list = [...reports];
+  let snapshot = await db.collection("reports").get();
+  let list = snapshot.docs.map(doc => doc.data());
   if (status && status !== "all") list = list.filter(r => r.status === status);
   if (search) {
     const s = search.toLowerCase();
     list = list.filter(r => r.title.toLowerCase().includes(s) || r.description.toLowerCase().includes(s) || r.location.toLowerCase().includes(s));
   }
-  const locs = new Set(reports.map(r => r.location)).size;
+  const locs = new Set(list.map(r => r.location)).size;
   res.json({
     success: true,
     stats: {
-      new: reports.filter(r => r.status === "new").length,
-      progress: reports.filter(r => r.status === "progress").length,
-      resolved: reports.filter(r => r.status === "resolved").length,
+      new: list.filter(r => r.status === "new").length,
+      progress: list.filter(r => r.status === "progress").length,
+      resolved: list.filter(r => r.status === "resolved").length,
       locations: locs,
     },
     data: list,
@@ -169,21 +197,34 @@ app.post("/api/reports", auth, async (req, res) => {
   let aiReason = "Auto-assigned based on availability";
 
   try {
-    const availableVols = volunteers.filter(v => v.status === "available");
+    const snapshotVol = await db.collection("volunteers").get();
+    const allVols = snapshotVol.docs.map(doc => doc.data());
+    const availableVols = allVols.filter(v => v.status === "available");
     const volList = availableVols.map(v => `${v._id}: ${v.name} (Skills: ${v.skills.join(", ")}, Location: ${v.location})`).join("\n");
 
-    const aiResponse = await callAI(
-      `Report Title: ${title}\nDescription: ${description || ""}\nLocation: ${location || "Unknown"}`,
-      `You are an AI for an NGO disaster relief system. Analyze this report and respond ONLY with valid JSON, no extra text:
-{
-  "priority": "urgent|high|medium|low",
-  "category": "Healthcare|Water & Sanitation|Food & Nutrition|Shelter|Logistics|Other",
-  "assignVolunteerId": "<_id from list or null>",
-  "reason": "<one sentence>"
-}
-Available volunteers:
-${volList}`
-    );
+    let aiResponse = null;
+
+    try {
+      aiResponse = await Promise.race([
+        callAI(
+          `Report Title: ${title}\nDescription: ${description || ""}\nLocation: ${location || "Unknown"}`,
+          `You are an AI for an NGO disaster relief system. Analyze this report and respond ONLY with valid JSON, no extra text:
+    {
+      "priority": "urgent|high|medium|low",
+      "category": "Healthcare|Water & Sanitation|Food & Nutrition|Shelter|Logistics|Other",
+      "assignVolunteerId": "<_id from list or null>",
+      "reason": "<one sentence>"
+    }
+    Available volunteers:
+    ${volList}`
+        ),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("AI timeout")), 3000)
+        )
+      ]);
+    } catch (err) {
+      console.log("AI skipped:", err.message);
+    }
 
     if (aiResponse) {
       const cleaned = aiResponse.replace(/```json|```/g, "").trim();
@@ -192,17 +233,26 @@ ${volList}`
       category = parsed.category || category;
       aiReason = parsed.reason || aiReason;
       if (parsed.assignVolunteerId) {
-        assignedVolunteer = volunteers.find(v => v._id === parsed.assignVolunteerId) || null;
+        assignedVolunteer = allVols.find(v => v._id === parsed.assignVolunteerId)
       }
     }
   } catch (e) {
     console.error("AI report processing error:", e.message);
   }
 
-  const id = "r" + reportCounter++;
-  const newReport = {
-    _id: id,
-    reportId: "RPT-" + String(reportCounter - 1).padStart(3, "0"),
+  const counterDoc = await db.collection("meta").doc("counters").get();
+
+  let reportCounter = 1;
+  let actionCounter = 1;
+
+  if (counterDoc.exists) {
+    const data = counterDoc.data();
+    reportCounter = data.reportCounter;
+    actionCounter = data.actionCounter;
+  }
+    const newReport = {
+    _id: "r" + reportCounter,
+    reportId: "RPT-" + String(reportCounter).padStart(3, "0"),
     title,
     description: description || "",
     location: location || "Unknown",
@@ -213,10 +263,10 @@ ${volList}`
     assignedTo: assignedVolunteer ? assignedVolunteer._id : null,
     createdAt: new Date().toISOString(),
   };
-  reports.push(newReport);
+  await db.collection("reports").doc(newReport._id).set(newReport);
 
   const newAction = {
-    _id: "a" + actionCounter++,
+    _id: "a" + actionCounter,
     title: `Handle: ${title}`,
     type: priority === "urgent" || priority === "high" ? priority : "medium",
     progress: 0,
@@ -224,9 +274,11 @@ ${volList}`
     reportId: newReport._id,
     createdAt: new Date().toISOString(),
   };
-  actions.push(newAction);
-
-  saveData();
+  await db.collection("actions").doc(newAction._id).set(newAction);
+  await db.collection("meta").doc("counters").set({
+    reportCounter: reportCounter + 1,
+    actionCounter: actionCounter + 1
+  });
 
   res.json({
     success: true,
@@ -240,9 +292,10 @@ ${volList}`
   });
 });
 
-app.get("/api/actions", auth, (req, res) => {
+app.get("/api/actions", auth, async(req, res) => {
   const { type, search } = req.query;
-  let list = [...actions];
+  let snapshot = await db.collection("actions").get();
+  let list = snapshot.docs.map(doc => doc.data());
   if (type && type !== "all") list = list.filter(a => a.type === type);
   if (search) {
     const s = search.toLowerCase();
@@ -251,31 +304,46 @@ app.get("/api/actions", auth, (req, res) => {
   res.json({
     success: true,
     stats: {
-      urgent: actions.filter(a => a.type === "urgent").length,
-      high: actions.filter(a => a.type === "high").length,
-      medium: actions.filter(a => a.type === "medium").length,
-      total: actions.length,
+      urgent: list.filter(a => a.type === "urgent").length,
+      high: list.filter(a => a.type === "high").length,
+      medium: list.filter(a => a.type === "medium").length,
+      total: list.length,
     },
     data: list,
   });
 });
 
-app.patch("/api/actions/:id/assign", auth, (req, res) => {
-  const action = actions.find(a => a._id === req.params.id);
-  if (!action) return res.status(404).json({ success: false, message: "Action not found" });
+app.patch("/api/actions/:id/assign", auth, async (req, res) => {
+  const { id } = req.params;
   const { volunteerId } = req.body;
-  const vol = volunteers.find(v => v._id === volunteerId);
-  if (!vol) return res.status(404).json({ success: false, message: "Volunteer not found" });
-  action.assignedTo = volunteerId;
-  saveData();
-  res.json({ success: true, data: action });
+
+  const docRef = db.collection("actions").doc(id);
+  const doc = await docRef.get();
+
+  if (!doc.exists) {
+    return res.status(404).json({ success: false, message: "Action not found" });
+  }
+
+  await docRef.update({ assignedTo: volunteerId });
+
+  const updated = await docRef.get();
+
+  res.json({ success: true, data: updated.data() });
 });
 
 app.post("/api/actions/:id/suggest-volunteer", auth, async (req, res) => {
-  const action = actions.find(a => a._id === req.params.id);
+  const actionDoc = await db.collection("actions").doc(req.params.id).get();
+
+  if (!actionDoc.exists) {
+    return res.status(404).json({ success: false, message: "Action not found" });
+  }
+
+  const action = actionDoc.data();
   if (!action) return res.status(404).json({ success: false, message: "Action not found" });
 
-  const availableVols = volunteers.filter(v => v.status === "available");
+  const snapshotVol = await db.collection("volunteers").get();
+  const allVols = snapshotVol.docs.map(doc => doc.data());
+  const availableVols = allVols.filter(v => v.status === "available");
   if (!availableVols.length) return res.status(400).json({ success: false, message: "No available volunteers" });
 
   const volList = availableVols.map(v => `${v._id}: ${v.name} (Skills: ${v.skills.join(", ")}, Location: ${v.location})`).join("\n");
@@ -296,7 +364,7 @@ ${volList}`
     const cleaned = aiResponse.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(cleaned);
 
-    const suggested = volunteers.find(v => v._id === parsed.volunteerId);
+    const suggested = allVols.find(v => v._id === parsed.volunteerId);
     if (!suggested) return res.status(400).json({ success: false, message: "AI suggested invalid volunteer" });
 
     res.json({ success: true, volunteerId: parsed.volunteerId, volunteerName: parsed.volunteerName, reason: parsed.reason });
@@ -311,9 +379,13 @@ app.post("/api/ai/chat", auth, async (req, res) => {
   const { message } = req.body;
   if (!message) return res.status(400).json({ success: false, message: "Message is required" });
 
-  const availableVols = volunteers.filter(v => v.status === "available").length;
-  const urgentActions = actions.filter(a => a.type === "urgent");
-  const newReportsCount = reports.filter(r => r.status === "new").length;
+  const volunteersData = (await db.collection("volunteers").get()).docs.map(d => d.data());
+  const actionsData = (await db.collection("actions").get()).docs.map(d => d.data());
+  const reportsData = (await db.collection("reports").get()).docs.map(d => d.data());
+
+  const availableVols = volunteersData.filter(v => v.status === "available").length;
+  const urgentActions = actionsData.filter(a => a.type === "urgent");
+  const newReportsCount = reportsData.filter(r => r.status === "new").length;
 
   try {
     const reply = await callAI(
@@ -336,4 +408,27 @@ Live system data:
   }
 });
 
+async function uploadDataToFirebase() {
+  console.log("Uploading data to Firebase...");
+
+  const batch = db.batch();
+
+  volunteers.forEach(v => {
+    const ref = db.collection("volunteers").doc(v._id);
+    batch.set(ref, v);
+  });
+
+  reports.forEach(r => {
+    const ref = db.collection("reports").doc(r._id);
+    batch.set(ref, r);
+  });
+
+  actions.forEach(a => {
+    const ref = db.collection("actions").doc(a._id);
+    batch.set(ref, a);
+  });
+
+  await batch.commit();
+  console.log("Data uploaded to Firebase ✅");
+}
 app.listen(5000, () => console.log("NGO Backend running on http://localhost:5000"));

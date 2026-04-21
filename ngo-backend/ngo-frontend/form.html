@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Submit Report</title>
+  <link rel="stylesheet" href="form.css">
+  <style>
+    .ai-badge {
+      display: inline-block;
+      background: #0d9488;
+      color: white;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    .ai-result {
+      display: none;
+      margin-top: 16px;
+      padding: 14px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 10px;
+      font-size: 13px;
+      color: #166534;
+    }
+    .ai-result strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+    .ai-result span {
+      display: inline-block;
+      margin-right: 12px;
+    }
+    .submitting {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="overlay" id="modal">
+  <div class="modal-box">
+
+    <div class="modal-header">
+      <div>
+        <h2>Submit New Report <span class="ai-badge">⚡ AI Auto-Assign</span></h2>
+        <p>AI will automatically set priority and assign the best volunteer.</p>
+      </div>
+      <span class="close" onclick="goBack()">×</span>
+    </div>
+
+    <form id="reportForm">
+
+      <label>Title</label>
+      <input type="text" id="report-title" placeholder="Brief description of the problem">
+
+      <div class="row">
+        <div class="col">
+          <label>Location</label>
+          <input type="text" id="report-location" placeholder="e.g. Sector 7, North Camp">
+        </div>
+
+        <div class="col">
+          <label>Category</label>
+          <div class="dropdown">
+            <div class="dropdown-btn" onclick="toggleDropdown('catMenu')">
+              Select <span>▾</span>
+            </div>
+            <div class="dropdown-menu" id="catMenu">
+              <div class="item">Water & Sanitation</div>
+              <div class="item">Healthcare</div>
+              <div class="item">Shelter</div>
+              <div class="item">Food & Nutrition</div>
+              <div class="item">Logistics</div>
+              <div class="item">Administration</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <label>Description</label>
+      <textarea id="report-description" placeholder="Detailed description of the problem — AI will read this to set priority and assign a volunteer automatically..."></textarea>
+
+      <label>Reported By</label>
+      <input type="text" id="report-by" placeholder="Your name and role">
+
+      <div class="ai-result" id="aiResult">
+        <strong>⚡ AI Decision</strong>
+        <span id="ai-priority"></span>
+        <span id="ai-category"></span>
+        <span id="ai-volunteer"></span>
+        <div id="ai-reason" style="margin-top:6px; color:#15803d;"></div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="cancel" onclick="goBack()">Cancel</button>
+        <button type="submit" class="submit" id="submitBtn">Submit Report</button>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<script src="form_connected.js"></script>
+</body>
+</html>
