@@ -1,4 +1,4 @@
-const BASE = "http://localhost:5000/api";
+const BASE = "https://ngorescue.onrender.com/api";
 
 async function ensureToken() {
   let token = localStorage.getItem("ngo_token");
